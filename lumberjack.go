@@ -3,7 +3,7 @@
 // Note that this is v2.0 of lumberjack, and should be imported using gopkg.in
 // thusly:
 //
-//   import "gopkg.in/natefinch/lumberjack.v2"
+//   import "github.com/mayankagwl/lumberjack"
 //
 // The package name remains simply lumberjack, and the code resides at
 // https://github.com/natefinch/lumberjack under the v2.0 branch.
@@ -111,6 +111,7 @@ type Logger struct {
 	file *os.File
 	mu   sync.Mutex
 
+	wg        sync.WaitGroup
 	millCh    chan bool
 	startMill sync.Once
 }
@@ -165,7 +166,17 @@ func (l *Logger) Write(p []byte) (n int, err error) {
 func (l *Logger) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
 	return l.close()
+
+	err := l.close()
+
+	if l.millCh != nil {
+		close(l.millCh)
+		l.wg.Wait()
+		l.millCh = nil
+	}
+	return err
 }
 
 // close closes the file if it is open.
@@ -376,6 +387,7 @@ func (l *Logger) millRunOnce() error {
 // millRun runs in a goroutine to manage post-rotation compression and removal
 // of old log files.
 func (l *Logger) millRun() {
+	defer l.wg.Done()
 	for range l.millCh {
 		// what am I going to do, log this?
 		_ = l.millRunOnce()
@@ -386,6 +398,7 @@ func (l *Logger) millRun() {
 // starting the mill goroutine if necessary.
 func (l *Logger) mill() {
 	l.startMill.Do(func() {
+		l.wg.Add(1)
 		l.millCh = make(chan bool, 1)
 		go l.millRun()
 	})
