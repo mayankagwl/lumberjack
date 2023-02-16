@@ -167,8 +167,6 @@ func (l *Logger) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	return l.close()
-
 	err := l.close()
 
 	if l.millCh != nil {
